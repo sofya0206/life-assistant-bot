@@ -62,6 +62,7 @@ async def interpret(user_text: str, context_text: str, history: list[dict]) -> A
         response_schema=AssistantOutput,
         thinking_config=_thinking(settings.gemini_thinking),
         max_output_tokens=8000,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
     contents = _to_contents(history, f"КОНТЕКСТ:\n{context_text}\n\nСООБЩЕНИЕ СОНИ:\n{user_text}")
     response = await client.aio.models.generate_content(model=settings.gemini_model, contents=contents, config=config)
@@ -74,7 +75,11 @@ async def interpret(user_text: str, context_text: str, history: list[dict]) -> A
 
 async def prose(prompt: str, max_tokens: int = 1200) -> str:
     client = _client_or_raise()
-    config = types.GenerateContentConfig(thinking_config=_thinking("low"), max_output_tokens=max_tokens)
+    config = types.GenerateContentConfig(
+        thinking_config=_thinking("low"),
+        max_output_tokens=max_tokens,
+        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+    )
     response = await client.aio.models.generate_content(model=settings.gemini_model, contents=prompt, config=config)
     _log_usage(response)
     return (response.text or "").strip()
