@@ -46,21 +46,22 @@ cp .env.example .env      # заполнить BOT_TOKEN, ALLOWED_IDS и оди�
 BOT_TOKEN=x .venv/bin/python -m pytest -q
 ```
 
-## Мозг: Gemini или Claude
+## Мозг: OpenAI, Gemini или Claude
 
-| | Gemini | Claude |
-|---|---|---|
-| Ключ | aistudio.google.com → Get API key, без карты | console.anthropic.com, предоплата от $5 |
-| Подписка (Google AI Pro / Claude Max) | к API не относится | к API не относится |
-| Модель по умолчанию | `gemini-3.8-flash` (есть в бесплатном тарифе) | `claude-sonnet-5` |
-| Бесплатный тариф | есть, но Google использует запросы для обучения, их могут читать люди | нет |
-| Цена на платном | flash-модели: доли цента за сообщение | несколько долларов в месяц |
+| | OpenAI | Gemini | Claude |
+|---|---|---|---|
+| Ключ | platform.openai.com → API keys, предоплата от $5 | aistudio.google.com, без карты | console.anthropic.com, предоплата от $5 |
+| Подписка (ChatGPT/Codex, Google AI Pro, Claude Max) | к API не относится | к API не относится | к API не относится |
+| Модель по умолчанию | `gpt-5-mini` | `gemini-3.8-flash` | `claude-sonnet-5` |
+| Бесплатный тариф | нет | есть, но запросы идут на обучение и их могут читать люди | нет |
+| Цена | доли цента за сообщение | доли цента за сообщение | несколько долларов в месяц |
 
-Для этой задачи (разобрать сообщение, разложить по времени) тяжёлая модель не нужна,
-flash-класса хватает. Но в бот уходят данные о здоровье и планах, поэтому на Gemini
-лучше включить биллинг (тогда данные не используются для обучения), а не сидеть
-на бесплатном тарифе. `LLM_PROVIDER=auto` выбирает Gemini, если задан его ключ,
-иначе Claude.
+Для этой задачи (разобрать сообщение, разложить по времени) тяжёлая модель не нужна.
+`LLM_PROVIDER=auto` берёт первого, у кого есть ключ: OpenAI → Gemini → Claude.
+
+**Из России** все три API без прокси недоступны: укажи `LLM_PROXY_URL` (или он
+возьмётся из `PROXY_URL`, который уже нужен для Telegram). Токены Codex / ChatGPT
+использовать в своём боте нельзя по условиям OpenAI, нужен обычный API-ключ.
 
 ## База знаний (`knowledge/`)
 
@@ -80,7 +81,7 @@ flash-класса хватает. Но в бот уходят данные о �
 |---|---|---|
 | `BOT_TOKEN` | @BotFather (можно взять токен tg-transcribe-bot, но старый бот остановить) | не запустится |
 | `ALLOWED_IDS` | `/id` в боте или @userinfobot | бот отвечает всем |
-| `GEMINI_API_KEY` или `ANTHROPIC_API_KEY` | см. выше | «тупой режим»: сообщения сохраняются заметками, брифы только по правилам |
+| `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | см. выше | «тупой режим»: сообщения сохраняются заметками, брифы только по правилам |
 | `GOOGLE_SA_FILE` + `GOOGLE_CALENDAR_ID` | см. ниже | календарь не читается/не пишется |
 | `CALCOM_API_KEY` | app.cal.com → Settings → Developer → API keys | брони cal.com не видны |
 | `TODOIST_TOKEN` | Todoist → Settings → Integrations → Developer | задачи не читаются/не создаются |
@@ -131,7 +132,7 @@ app/
   models.py        pydantic-схема ответа LLM (AssistantOutput)
   prompts.py       правила формата + склейка knowledge/*.md в системный промпт
   llm.py           единый вход: interpret / prose / ping
-  providers/       gemini_llm.py (google-genai), anthropic_llm.py (anthropic SDK)
+  providers/       openai_llm.py, gemini_llm.py, anthropic_llm.py (официальные SDK, прокси через LLM_PROXY_URL)
   context.py       снимок мира для LLM/брифов (фокус недели, календарь, задачи, цели, журнал, нормы)
   alerts.py        правила ред-флагов (чистые функции, покрыты тестами)
   briefs.py        утренний бриф, проверка завтрака, вечерний чек-ин, обзор недели

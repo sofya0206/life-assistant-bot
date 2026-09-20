@@ -26,7 +26,11 @@ def _client_or_raise() -> genai.Client:
     if not settings.gemini_api_key:
         raise RuntimeError("GEMINI_API_KEY не задан")
     if _client is None:
-        _client = genai.Client(api_key=settings.gemini_api_key)
+        http_options = None
+        if settings.llm_proxy_url:
+            proxy = {"proxy": settings.llm_proxy_url}
+            http_options = types.HttpOptions(client_args=proxy, async_client_args=proxy)
+        _client = genai.Client(api_key=settings.gemini_api_key, http_options=http_options)
     return _client
 
 

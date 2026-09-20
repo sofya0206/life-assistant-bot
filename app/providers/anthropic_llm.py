@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+import httpx
 from anthropic import Anthropic, transform_schema
 from pydantic import TypeAdapter
 
@@ -23,7 +24,8 @@ def _client_or_raise() -> Anthropic:
     if not settings.anthropic_api_key:
         raise RuntimeError("ANTHROPIC_API_KEY не задан")
     if _client is None:
-        _client = Anthropic(api_key=settings.anthropic_api_key)
+        http_client = httpx.Client(proxy=settings.llm_proxy_url, timeout=120) if settings.llm_proxy_url else None
+        _client = Anthropic(api_key=settings.anthropic_api_key, http_client=http_client)
     return _client
 
 

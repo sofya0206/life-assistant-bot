@@ -13,12 +13,14 @@ class LLMDisabled(RuntimeError):
 
 def _provider():
     name = settings.llm_provider
-    if name == "gemini":
+    if name == "openai":
+        from .providers import openai_llm as p
+    elif name == "gemini":
         from .providers import gemini_llm as p
     elif name == "anthropic":
         from .providers import anthropic_llm as p
     else:
-        raise LLMDisabled("LLM не настроен: задай GEMINI_API_KEY или ANTHROPIC_API_KEY")
+        raise LLMDisabled("LLM не настроен: задай OPENAI_API_KEY, GEMINI_API_KEY или ANTHROPIC_API_KEY")
     return p
 
 

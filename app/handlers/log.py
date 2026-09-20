@@ -63,7 +63,7 @@ async def handle_text(message: Message, text: str) -> None:
     chat_id = message.chat.id
     if not settings.llm_enabled:
         db.add_entry("note", {"description": text}, raw=text)
-        await message.answer("📝 Записала как заметку. LLM не подключён (нет GEMINI_API_KEY / ANTHROPIC_API_KEY), "
+        await message.answer("📝 Записала как заметку. LLM не подключён (нет OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY), "
                              "поэтому планировать и разбирать записи пока не могу.")
         return
 

@@ -63,7 +63,11 @@ class Settings:
     wake_target: tuple[int, int]
     sleep_target_hours: float
 
-    llm_provider_env: str          # auto | gemini | anthropic
+    llm_provider_env: str          # auto | openai | gemini | anthropic
+    llm_proxy_url: str | None      # прокси для вызовов LLM (из России без него API недоступны)
+    openai_api_key: str | None
+    openai_model: str
+    openai_reasoning: str          # minimal | low | medium | high (gpt-5*)
     gemini_api_key: str | None
     gemini_model: str
     gemini_thinking: str           # low | medium | high (Gemini 3.x)
@@ -90,6 +94,10 @@ class Settings:
             return "anthropic" if self.anthropic_api_key else None
         if env == "gemini":
             return "gemini" if self.gemini_api_key else None
+        if env == "openai":
+            return "openai" if self.openai_api_key else None
+        if self.openai_api_key:
+            return "openai"
         if self.gemini_api_key:
             return "gemini"
         if self.anthropic_api_key:
@@ -102,7 +110,7 @@ class Settings:
 
     @property
     def llm_model(self) -> str:
-        return self.gemini_model if self.llm_provider == "gemini" else self.claude_model
+        return {"openai": self.openai_model, "gemini": self.gemini_model}.get(self.llm_provider, self.claude_model)
 
     @property
     def google_enabled(self) -> bool:
@@ -146,6 +154,10 @@ def load_settings() -> Settings:
         wake_target=_hhmm(os.getenv("WAKE_TARGET", ""), "07:30"),
         sleep_target_hours=float(os.getenv("SLEEP_TARGET_HOURS", "7.5") or 7.5),
         llm_provider_env=_str("LLM_PROVIDER", "auto").lower(),
+        llm_proxy_url=_opt("LLM_PROXY_URL") or _opt("PROXY_URL"),
+        openai_api_key=_opt("OPENAI_API_KEY"),
+        openai_model=_str("OPENAI_MODEL", "gpt-5-mini"),
+        openai_reasoning=_str("OPENAI_REASONING", "low").lower(),
         gemini_api_key=_opt("GEMINI_API_KEY"),
         gemini_model=_str("GEMINI_MODEL", "gemini-3.8-flash"),
         gemini_thinking=_str("GEMINI_THINKING", "low").lower(),

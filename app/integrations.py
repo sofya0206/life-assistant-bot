@@ -76,7 +76,7 @@ async def healthcheck() -> list[str]:
     if settings.llm_enabled:
         lines.append(f"LLM: {settings.llm_provider}, модель {settings.llm_model}")
     else:
-        lines.append("LLM: ключа нет (GEMINI_API_KEY / ANTHROPIC_API_KEY), тупой режим")
+        lines.append("LLM: ключа нет (OPENAI_API_KEY / GEMINI_API_KEY / ANTHROPIC_API_KEY), тупой режим")
     return lines
 
 

@@ -8,12 +8,13 @@
 
 - Python 3.14, aiogram 3 (polling), SQLite через `sqlite3`, APScheduler 3,
   httpx для cal.com/Todoist, google-api-python-client для Calendar, faster-whisper.
-- LLM: два провайдера за одним интерфейсом `app/llm.py` (`interpret`, `prose`, `ping`):
-  `providers/gemini_llm.py` (SDK `google-genai`, `client.aio.models.generate_content`
-  с `response_schema=AssistantOutput`) и `providers/anthropic_llm.py` (SDK `anthropic`,
-  `output_config.format` + adaptive thinking). Новый провайдер = новый модуль с теми же
-  тремя функциями + ветка в `config.Settings.llm_provider`. Не использовать
-  OpenAI-совместимые шимы.
+- LLM: три провайдера за одним интерфейсом `app/llm.py` (`interpret`, `prose`, `model_name`):
+  `providers/openai_llm.py` (SDK `openai`, `responses.parse` с `text_format=AssistantOutput`),
+  `providers/gemini_llm.py` (SDK `google-genai`, `generate_content` с `response_schema`),
+  `providers/anthropic_llm.py` (SDK `anthropic`, `output_config.format` + adaptive thinking).
+  Все три умеют ходить через `LLM_PROXY_URL` (httpx proxy, SOCKS поддержан). Новый
+  провайдер = новый модуль с теми же функциями + ветка в `config.Settings.llm_provider`.
+  Только официальные SDK, без OpenAI-совместимых шимов для чужих провайдеров.
 - Язык интерфейса и промптов — русский, обращение на «ты». Комментарии в коде — русские.
 - Ответ LLM — строго `app/models.py::AssistantOutput`. Меняешь модель → схема обновляется
   сама у обоих провайдеров. Не используй `dict`-поля, `min/max`, рекурсию — structured
@@ -51,6 +52,8 @@ BOT_TOKEN=x .venv/bin/python -m pytest -q  # тесты (BOT_TOKEN нужен и
 
 ## Известные допущения / что проверить на живых ключах
 
+0. `providers/openai_llm.py`: `reasoning.effort` передаётся только моделям `gpt-5*`/`o*`.
+   Схема `AssistantOutput` проходит `to_strict_json_schema` (проверено), живой ответ не тестировался.
 1. `providers/gemini_llm.py`: используется legacy-путь `generate_content`; Google
    рекомендует новый Interactions API (`client.interactions.create`) — переезжать
    стоит, когда он стабилизируется. `thinking_level` передаётся только моделям

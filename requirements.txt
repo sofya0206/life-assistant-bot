@@ -9,3 +9,5 @@ google-auth>=2.35
 httpx>=0.27
 pydantic>=2.9
 google-genai>=1.30
+openai>=1.100
+httpx[socks]>=0.27
