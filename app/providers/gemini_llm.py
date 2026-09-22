@@ -11,14 +11,35 @@ import logging
 
 from google import genai
 from google.genai import types
+from pydantic import BaseModel, Field
 
 from ..config import settings
-from ..models import AssistantOutput
+from ..models import AssistantOutput, CalendarAction, LogEntry, Question, TaskAction
 from ..prompts import SYSTEM_PROMPT
 
 log = logging.getLogger(__name__)
 
 _client: genai.Client | None = None
+
+
+class _InvalidStructuredOutput(RuntimeError):
+    """Модель вернула оборванный или не соответствующий схеме JSON."""
+
+
+class _PlannerOutput(BaseModel):
+    """Компактная схема для основного сценария: календарь и Todoist.
+
+    Чем меньше схема, тем реже бесплатные модели обрывают JSON. Результат
+    затем расширяется до AssistantOutput значениями по умолчанию.
+    """
+
+    reply: str
+    entries: list[LogEntry] = Field(default_factory=list)
+    calendar_actions: list[CalendarAction] = Field(default_factory=list)
+    task_actions: list[TaskAction] = Field(default_factory=list)
+    questions: list[Question] = Field(default_factory=list)
+    red_flags: list[str] = Field(default_factory=list)
+    mits: list[str] = Field(default_factory=list)
 
 
 def _client_or_raise() -> genai.Client:
@@ -40,6 +61,8 @@ def _models() -> tuple[str, ...]:
 
 
 def _retryable(exc: Exception) -> bool:
+    if isinstance(exc, _InvalidStructuredOutput):
+        return True
     code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
     return code in {429, 500, 502, 503, 504}
 
@@ -52,7 +75,7 @@ async def _interaction(
     input_text: str,
     *,
     system_instruction: str | None = None,
-    schema: type[AssistantOutput] | None = None,
+    schema: type[BaseModel] | None = None,
     max_tokens: int,
 ) -> str:
     """Interactions API с быстрым переключением на резервную модель."""
@@ -60,8 +83,9 @@ async def _interaction(
     last_error: Exception | None = None
     models = _models()
     for index, model in enumerate(models):
-        # Не заставляем Telegram ждать одну перегруженную модель минутами.
-        attempt_timeout = 15 if index == 0 else 18
+        # Сложной команде с несколькими переносами нужно больше 15 секунд,
+        # но общий лимит двух моделей остаётся меньше минуты.
+        attempt_timeout = 25
         try:
             response_format = (
                 {
@@ -84,17 +108,29 @@ async def _interaction(
                 ),
                 timeout=attempt_timeout + 1,
             )
-            if index:
-                log.warning("Gemini fallback: ответила модель %s", model)
             text = response.output_text
             if not text:
                 raise RuntimeError("Gemini вернул пустой ответ")
+            if schema:
+                try:
+                    schema.model_validate_json(text)
+                except Exception as exc:  # noqa: BLE001
+                    # Structured output иногда обрывается на бесплатных моделях.
+                    # Не показываем технический JSON пользователю: переключаемся
+                    # на следующую модель так же, как при 503/таймауте.
+                    raise _InvalidStructuredOutput("модель вернула неполный JSON") from exc
+            if index:
+                log.warning("Google AI fallback: ответила модель %s", model)
             return text
         except Exception as exc:  # noqa: BLE001
             if not (_timed_out(exc) or _retryable(exc)):
                 raise
             last_error = exc
-            code = getattr(exc, "status_code", None) or getattr(exc, "code", None) or "timeout"
+            code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+            if isinstance(exc, _InvalidStructuredOutput):
+                code = "invalid-json"
+            elif not code:
+                code = "timeout"
             log.warning("Google AI %s временно недоступна (%s), пробую следующую", model, code)
             if index + 1 < len(models):
                 await asyncio.sleep(0.2)
@@ -121,8 +157,8 @@ async def interpret(user_text: str, context_text: str, history: list[dict]) -> A
     text = await _interaction(
         prompt,
         system_instruction=SYSTEM_PROMPT,
-        schema=AssistantOutput,
-        max_tokens=1600,
+        schema=_PlannerOutput,
+        max_tokens=3200,
     )
     return AssistantOutput.model_validate_json(text)
 

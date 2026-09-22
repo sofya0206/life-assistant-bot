@@ -83,7 +83,10 @@ async def handle_text(message: Message, text: str) -> None:
         return
     except Exception as exc:  # noqa: BLE001
         log.exception("interpret failed")
-        await status.edit_text(f"❌ Не получилось обработать: {esc(str(exc))[:300]}")
+        await status.edit_text(
+            "❌ Не получилось обработать запрос. Я уже попробовала несколько моделей — "
+            "попробуй ещё раз чуть позже или раздели сообщение на две части."
+        )
         return
 
     saved = _save_entries(out, text)

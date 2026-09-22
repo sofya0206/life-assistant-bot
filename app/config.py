@@ -176,7 +176,7 @@ def load_settings() -> Settings:
             item.strip()
             for item in os.getenv(
                 "GEMINI_FALLBACK_MODELS",
-                "gemini-3-flash-preview,gemini-3.6-flash",
+                "gemini-3-flash-preview",
             ).split(",")
             if item.strip()
         ),
