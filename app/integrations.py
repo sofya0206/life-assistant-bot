@@ -10,11 +10,12 @@ from .alerts import Event
 from .config import settings
 from .services.calcom import CalCom
 from .services.gcal import GoogleCalendar
+from .services.gcal_apps_script import GoogleAppsScriptCalendar
 from .services.todoist_client import Todoist
 
 log = logging.getLogger(__name__)
 
-google: GoogleCalendar | None = None
+google: GoogleCalendar | GoogleAppsScriptCalendar | None = None
 calcom: CalCom | None = None
 todoist: Todoist | None = None
 
@@ -23,7 +24,15 @@ def init() -> None:
     global google, calcom, todoist
     if settings.google_enabled:
         try:
-            google = GoogleCalendar(settings.google_sa_file, settings.google_calendar_id, settings.tz_name)
+            if settings.google_apps_script_url and settings.google_apps_script_secret:
+                google = GoogleAppsScriptCalendar(
+                    settings.google_apps_script_url,
+                    settings.google_apps_script_secret,
+                    settings.google_calendar_ids,
+                    settings.tz_name,
+                )
+            else:
+                google = GoogleCalendar(settings.google_sa_file, settings.google_calendar_id, settings.tz_name)
         except Exception as exc:  # noqa: BLE001
             log.warning("Google Calendar не инициализирован: %s", exc)
     if settings.calcom_enabled:
@@ -39,9 +48,12 @@ async def gather_events(start: datetime, end: datetime) -> list[Event]:
     сервиса не роняют другой."""
     tasks = []
     if google:
-        tasks.append(google.list_events(start, end))
+        tasks.append(asyncio.wait_for(google.list_events(start, end), timeout=12))
     if calcom:
-        tasks.append(calcom.upcoming(days=max(1, (end - datetime.now(settings.tz)).days + 1)))
+        tasks.append(asyncio.wait_for(
+            calcom.upcoming(days=max(1, (end - datetime.now(settings.tz)).days + 1)),
+            timeout=12,
+        ))
     events: list[Event] = []
     for res in await asyncio.gather(*tasks, return_exceptions=True):
         if isinstance(res, Exception):
@@ -57,7 +69,7 @@ async def gather_tasks(query: str = "today | overdue") -> list[dict]:
     if not todoist:
         return []
     try:
-        return await todoist.tasks(query)
+        return await asyncio.wait_for(todoist.tasks(query), timeout=10)
     except Exception as exc:  # noqa: BLE001
         log.warning("Ошибка Todoist: %s", exc)
         return []

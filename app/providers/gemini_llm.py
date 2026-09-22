@@ -65,7 +65,7 @@ async def interpret(user_text: str, context_text: str, history: list[dict]) -> A
         response_mime_type="application/json",
         response_schema=AssistantOutput,
         thinking_config=_thinking(settings.gemini_thinking),
-        max_output_tokens=8000,
+        max_output_tokens=3000,
         automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
     )
     contents = _to_contents(history, f"КОНТЕКСТ:\n{context_text}\n\nСООБЩЕНИЕ СОНИ:\n{user_text}")

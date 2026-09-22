@@ -82,11 +82,23 @@ BOT_TOKEN=x .venv/bin/python -m pytest -q
 | `BOT_TOKEN` | @BotFather (можно взять токен tg-transcribe-bot, но старый бот остановить) | не запустится |
 | `ALLOWED_IDS` | `/id` в боте или @userinfobot | бот отвечает всем |
 | `OPENAI_API_KEY` / `GEMINI_API_KEY` / `ANTHROPIC_API_KEY` | см. выше | «тупой режим»: сообщения сохраняются заметками, брифы только по правилам |
-| `GOOGLE_SA_FILE` + `GOOGLE_CALENDAR_ID` | см. ниже | календарь не читается/не пишется |
+| `GOOGLE_APPS_SCRIPT_URL` + `GOOGLE_APPS_SCRIPT_SECRET` | см. ниже | календарь не читается/не пишется |
 | `CALCOM_API_KEY` | app.cal.com → Settings → Developer → API keys | брони cal.com не видны |
 | `TODOIST_TOKEN` | Todoist → Settings → Integrations → Developer | задачи не читаются/не создаются |
 
-### Google Calendar за 5 минут (сервисный аккаунт)
+### Google Calendar без карты через Apps Script
+
+1. Создай проект на `script.google.com` и вставь содержимое `google_apps_script/Code.gs`.
+2. В **Project Settings → Script Properties** добавь `API_SECRET` со случайным длинным значением.
+3. **Deploy → New deployment → Web app**: Execute as **Me**, access **Anyone**. Подтверди доступ к календарю.
+4. В `.env` укажи URL развёртывания, тот же секрет и список календарей:
+   `GOOGLE_APPS_SCRIPT_URL=...`, `GOOGLE_APPS_SCRIPT_SECRET=...`,
+   `GOOGLE_CALENDAR_IDS=личный@gmail.com,другой-calendar-id`.
+
+Первый ID — календарь для новых событий; читать бот будет все перечисленные. Стандартное
+использование Calendar API бесплатно. Сервисный аккаунт ниже остаётся запасным вариантом.
+
+### Google Calendar через сервисный аккаунт
 
 1. console.cloud.google.com → создать проект → «APIs & Services» → включить **Google Calendar API**.
 2. IAM & Admin → Service Accounts → Create → после создания: Keys → Add key → JSON. Файл положить в `data/google-sa.json`.

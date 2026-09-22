@@ -60,6 +60,8 @@ class Settings:
     morning_time: tuple[int, int]
     breakfast_check_time: tuple[int, int]
     evening_time: tuple[int, int]
+    morning_brief_enabled: bool
+    health_checkins_enabled: bool
     wake_target: tuple[int, int]
     sleep_target_hours: float
 
@@ -80,6 +82,9 @@ class Settings:
 
     google_sa_file: str | None
     google_calendar_id: str | None
+    google_apps_script_url: str | None
+    google_apps_script_secret: str | None
+    google_calendar_ids: tuple[str, ...]
     calcom_api_key: str | None
     calcom_api_version: str
     todoist_token: str | None
@@ -114,7 +119,11 @@ class Settings:
 
     @property
     def google_enabled(self) -> bool:
-        return bool(self.google_sa_file and self.google_calendar_id and Path(self.google_sa_file).exists())
+        apps_script = bool(self.google_apps_script_url and self.google_apps_script_secret)
+        service_account = bool(
+            self.google_sa_file and self.google_calendar_id and Path(self.google_sa_file).exists()
+        )
+        return apps_script or service_account
 
     @property
     def calcom_enabled(self) -> bool:
@@ -151,6 +160,8 @@ def load_settings() -> Settings:
         morning_time=_hhmm(os.getenv("MORNING_TIME", ""), "08:00"),
         breakfast_check_time=_hhmm(os.getenv("BREAKFAST_CHECK_TIME", ""), "11:00"),
         evening_time=_hhmm(os.getenv("EVENING_TIME", ""), "21:30"),
+        morning_brief_enabled=_bool(os.getenv("MORNING_BRIEF_ENABLED"), True),
+        health_checkins_enabled=_bool(os.getenv("HEALTH_CHECKINS_ENABLED"), False),
         wake_target=_hhmm(os.getenv("WAKE_TARGET", ""), "07:30"),
         sleep_target_hours=float(os.getenv("SLEEP_TARGET_HOURS", "7.5") or 7.5),
         llm_provider_env=_str("LLM_PROVIDER", "auto").lower(),
@@ -168,6 +179,13 @@ def load_settings() -> Settings:
         whisper_language=_str("WHISPER_LANGUAGE", "ru"),
         google_sa_file=_opt("GOOGLE_SA_FILE"),
         google_calendar_id=_opt("GOOGLE_CALENDAR_ID"),
+        google_apps_script_url=_opt("GOOGLE_APPS_SCRIPT_URL"),
+        google_apps_script_secret=_opt("GOOGLE_APPS_SCRIPT_SECRET"),
+        google_calendar_ids=tuple(
+            item.strip()
+            for item in os.getenv("GOOGLE_CALENDAR_IDS", "").split(",")
+            if item.strip()
+        ),
         calcom_api_key=_opt("CALCOM_API_KEY"),
         calcom_api_version=_str("CALCOM_API_VERSION", "2024-08-13"),
         todoist_token=_opt("TODOIST_TOKEN"),

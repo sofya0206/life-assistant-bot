@@ -51,14 +51,17 @@ async def send_evening(bot: Bot) -> None:
 
 def start(bot: Bot) -> AsyncIOScheduler:
     scheduler = AsyncIOScheduler(timezone=settings.tz)
-    jobs = (
-        ("morning", send_morning, settings.morning_time),
-        ("breakfast", send_breakfast_check, settings.breakfast_check_time),
-        ("evening", send_evening, settings.evening_time),
-    )
+    jobs = []
+    if settings.morning_brief_enabled:
+        jobs.append(("morning", send_morning, settings.morning_time))
+    if settings.health_checkins_enabled:
+        jobs.extend((
+            ("breakfast", send_breakfast_check, settings.breakfast_check_time),
+            ("evening", send_evening, settings.evening_time),
+        ))
     for job_id, fn, (hh, mm) in jobs:
         scheduler.add_job(fn, CronTrigger(hour=hh, minute=mm, timezone=settings.tz),
                           args=[bot], id=job_id, misfire_grace_time=3600, coalesce=True)
     scheduler.start()
-    log.info("Планировщик: %s", ", ".join(f"{j[0]} {j[2][0]:02d}:{j[2][1]:02d}" for j in jobs))
+    log.info("Планировщик: %s", ", ".join(f"{j[0]} {j[2][0]:02d}:{j[2][1]:02d}" for j in jobs) or "выключен")
     return scheduler

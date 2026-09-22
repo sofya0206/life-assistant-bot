@@ -2,6 +2,7 @@
 цели, журнал, базовые нормы и ред-флаги по правилам."""
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -28,8 +29,10 @@ class Snapshot:
 async def snapshot(days_ahead: int = 7, days_back: int = 14, alert_days: int = 2) -> Snapshot:
     now = db.now_local()
     start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    events = await integrations.gather_events(start, start + timedelta(days=days_ahead))
-    tasks = await integrations.gather_tasks("7 days | overdue")
+    events, tasks = await asyncio.gather(
+        integrations.gather_events(start, start + timedelta(days=days_ahead)),
+        integrations.gather_tasks("7 days | overdue"),
+    )
     goals = db.list_goals()
     progress = db.goal_progress_since(now - timedelta(days=30))
     entries = db.entries_since(now - timedelta(days=days_back))

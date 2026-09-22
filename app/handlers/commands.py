@@ -14,21 +14,17 @@ from ..render import entry_line, esc, fmt_range, split_message
 router = Router(name="commands")
 
 HELP = (
-    "Я твой ассистент по планированию, целям и здоровью.\n\n"
+    "Я помощник для Google Calendar и Todoist.\n\n"
     "Просто пиши или записывай голосовые:\n"
-    "• «легла в час, встала в восемь, завтракала овсянкой»\n"
-    "• «завтра в 15 созвон с Никитой, перенеси зал на вечер»\n"
-    "• «спланируй завтра» / «спланируй неделю»\n"
-    "• «хочу к декабрю подтянуть английский до B2» — сделаю SMART-цель\n\n"
+    "• «завтра в 15 созвон с Никитой»\n"
+    "• «добавь в Todoist подготовить презентацию до пятницы»\n"
+    "• «что у меня на этой неделе?»\n"
+    "• «когда у меня есть свободные два часа?»\n"
+    "Изменения сначала покажу, затем создам после кнопки «Применить».\n\n"
     "Команды:\n"
-    "/today — утренний бриф сейчас\n"
-    "/evening — вечерний чек-ин сейчас\n"
-    "/week — обзор недели\n"
+    "/today — события и задачи на сегодня\n"
     "/events — календарь на 7 дней\n"
     "/tasks — задачи Todoist\n"
-    "/goals — цели\n"
-    "/log — журнал за 3 дня\n"
-    "/undo — удалить последнюю запись\n"
     "/status — что подключено\n"
     "/id — твой Telegram id"
 )
@@ -143,7 +139,12 @@ async def cmd_status(message: Message) -> None:
         try:
             lines.append(await llm.ping())
         except Exception as exc:  # noqa: BLE001
-            lines.append(f"Claude: ошибка — {exc}")
-    sched = ", ".join(f"{h:02d}:{m:02d}" for h, m in (settings.morning_time, settings.breakfast_check_time, settings.evening_time))
-    lines.append(f"Расписание (бриф / завтрак / вечер): {sched}, tz {settings.tz_name}, chat_id {settings.chat_id}")
+            lines.append(f"LLM: ошибка — {exc}")
+    if settings.morning_brief_enabled:
+        h, m = settings.morning_time
+        lines.append(f"Утренний обзор: {h:02d}:{m:02d}")
+    else:
+        lines.append("Утренний обзор: выключен")
+    lines.append(f"Чек-ины здоровья: {'включены' if settings.health_checkins_enabled else 'выключены'}")
+    lines.append(f"Таймзона: {settings.tz_name}, chat_id {settings.chat_id}")
     await message.answer("\n".join(esc(line) for line in lines))

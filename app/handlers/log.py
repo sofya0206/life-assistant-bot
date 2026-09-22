@@ -3,6 +3,7 @@
 кнопками с вариантами."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import tempfile
@@ -69,9 +70,17 @@ async def handle_text(message: Message, text: str) -> None:
 
     status = await message.answer("⏳ Думаю…")
     try:
-        snap = await snapshot()
+        snap = await asyncio.wait_for(snapshot(), timeout=15)
+        await status.edit_text("🤖 Собираю план…")
         history = [{"role": m["role"], "content": m["content"]} for m in db.recent_messages(chat_id, 6)]
-        out = await llm.interpret(text, to_llm_text(snap), history)
+        out = await asyncio.wait_for(
+            llm.interpret(text, to_llm_text(snap), history),
+            timeout=35,
+        )
+    except TimeoutError:
+        log.warning("Обработка сообщения превысила лимит времени")
+        await status.edit_text("⏱ Gemini отвечает слишком долго. Попробуй отправить сообщение ещё раз.")
+        return
     except Exception as exc:  # noqa: BLE001
         log.exception("interpret failed")
         await status.edit_text(f"❌ Не получилось обработать: {esc(str(exc))[:300]}")

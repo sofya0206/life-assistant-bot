@@ -1,0 +1,23 @@
+[Unit]
+Description=Life Assistant Telegram Bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=lifeassistant
+Group=lifeassistant
+WorkingDirectory=/opt/life-assistant-bot
+Environment=PYTHONUNBUFFERED=1
+Environment=DB_PATH=/opt/life-assistant-bot/data/assistant.sqlite3
+Environment=WHISPER_MODEL=base
+Environment=MORNING_BRIEF_ENABLED=true
+Environment=HEALTH_CHECKINS_ENABLED=false
+ExecStart=/opt/life-assistant-bot/.venv/bin/python -m app.main
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target
