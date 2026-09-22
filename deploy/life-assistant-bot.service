@@ -11,6 +11,9 @@ WorkingDirectory=/opt/life-assistant-bot
 Environment=PYTHONUNBUFFERED=1
 Environment=DB_PATH=/opt/life-assistant-bot/data/assistant.sqlite3
 Environment=WHISPER_MODEL=base
+Environment=GEMINI_MODEL=gemma-4-26b-a4b-it
+Environment=GEMINI_FALLBACK_MODELS=gemini-3-flash-preview,gemini-3.6-flash
+Environment=KNOWLEDGE_DIR=/opt/life-assistant-bot/knowledge-focused
 Environment=MORNING_BRIEF_ENABLED=true
 Environment=HEALTH_CHECKINS_ENABLED=false
 ExecStart=/opt/life-assistant-bot/.venv/bin/python -m app.main

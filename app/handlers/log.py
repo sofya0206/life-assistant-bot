@@ -75,7 +75,7 @@ async def handle_text(message: Message, text: str) -> None:
         history = [{"role": m["role"], "content": m["content"]} for m in db.recent_messages(chat_id, 6)]
         out = await asyncio.wait_for(
             llm.interpret(text, to_llm_text(snap), history),
-            timeout=35,
+            timeout=55,
         )
     except TimeoutError:
         log.warning("Обработка сообщения превысила лимит времени")

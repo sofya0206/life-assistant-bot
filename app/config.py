@@ -72,6 +72,7 @@ class Settings:
     openai_reasoning: str          # minimal | low | medium | high (gpt-5*)
     gemini_api_key: str | None
     gemini_model: str
+    gemini_fallback_models: tuple[str, ...]
     gemini_thinking: str           # low | medium | high (Gemini 3.x)
     anthropic_api_key: str | None
     claude_model: str
@@ -170,7 +171,15 @@ def load_settings() -> Settings:
         openai_model=_str("OPENAI_MODEL", "gpt-5-mini"),
         openai_reasoning=_str("OPENAI_REASONING", "low").lower(),
         gemini_api_key=_opt("GEMINI_API_KEY"),
-        gemini_model=_str("GEMINI_MODEL", "gemini-3.8-flash"),
+        gemini_model=_str("GEMINI_MODEL", "gemma-4-26b-a4b-it"),
+        gemini_fallback_models=tuple(
+            item.strip()
+            for item in os.getenv(
+                "GEMINI_FALLBACK_MODELS",
+                "gemini-3-flash-preview,gemini-3.6-flash",
+            ).split(",")
+            if item.strip()
+        ),
         gemini_thinking=_str("GEMINI_THINKING", "low").lower(),
         anthropic_api_key=_opt("ANTHROPIC_API_KEY"),
         claude_model=_str("CLAUDE_MODEL", "claude-sonnet-5"),

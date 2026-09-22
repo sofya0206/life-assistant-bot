@@ -1,5 +1,4 @@
-"""Провайдер Gemini (google-genai SDK): structured output через
-response_schema (pydantic-модель) + thinking_level для моделей Gemini 3.
+"""Провайдер Google GenAI: structured output через Interactions API.
 
 Бесплатный тариф Gemini API есть у flash-моделей, но по условиям Google на
 бесплатном тарифе запросы используются для обучения и могут читаться людьми.
@@ -7,6 +6,7 @@ response_schema (pydantic-модель) + thinking_level для моделей G
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from google import genai
@@ -34,59 +34,101 @@ def _client_or_raise() -> genai.Client:
     return _client
 
 
-def _thinking(level: str) -> types.ThinkingConfig | None:
-    """thinking_level есть только у Gemini 3.x; 2.5 управляется thinking_budget,
-    для дешёвого разбора там просто ничего не задаём."""
-    if settings.gemini_model.startswith("gemini-3"):
-        return types.ThinkingConfig(thinking_level=level)
-    return None
+def _models() -> tuple[str, ...]:
+    """Основная и запасные модели без повторов, в порядке приоритета."""
+    return tuple(dict.fromkeys((settings.gemini_model, *settings.gemini_fallback_models)))
 
 
-def _to_contents(history: list[dict], last_user_text: str) -> list[types.Content]:
-    contents: list[types.Content] = []
+def _retryable(exc: Exception) -> bool:
+    code = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    return code in {429, 500, 502, 503, 504}
+
+
+def _timed_out(exc: Exception) -> bool:
+    return isinstance(exc, TimeoutError) or "Timeout" in type(exc).__name__
+
+
+async def _interaction(
+    input_text: str,
+    *,
+    system_instruction: str | None = None,
+    schema: type[AssistantOutput] | None = None,
+    max_tokens: int,
+) -> str:
+    """Interactions API с быстрым переключением на резервную модель."""
+    client = _client_or_raise()
+    last_error: Exception | None = None
+    models = _models()
+    for index, model in enumerate(models):
+        # Не заставляем Telegram ждать одну перегруженную модель минутами.
+        attempt_timeout = 15 if index == 0 else 18
+        try:
+            response_format = (
+                {
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": schema.model_json_schema(),
+                }
+                if schema
+                else {"type": "text"}
+            )
+            response = await asyncio.wait_for(
+                client.aio.interactions.create(
+                    model=model,
+                    input=input_text,
+                    system_instruction=system_instruction,
+                    response_format=response_format,
+                    generation_config={"max_output_tokens": max_tokens},
+                    store=False,
+                    timeout=float(attempt_timeout),
+                ),
+                timeout=attempt_timeout + 1,
+            )
+            if index:
+                log.warning("Gemini fallback: ответила модель %s", model)
+            text = response.output_text
+            if not text:
+                raise RuntimeError("Gemini вернул пустой ответ")
+            return text
+        except Exception as exc:  # noqa: BLE001
+            if not (_timed_out(exc) or _retryable(exc)):
+                raise
+            last_error = exc
+            code = getattr(exc, "status_code", None) or getattr(exc, "code", None) or "timeout"
+            log.warning("Google AI %s временно недоступна (%s), пробую следующую", model, code)
+            if index + 1 < len(models):
+                await asyncio.sleep(0.2)
+    assert last_error is not None
+    raise RuntimeError("Google AI сейчас перегружен. Бот уже попробовал основную и запасные модели.") from last_error
+
+
+def _input_with_history(history: list[dict], last_user_text: str) -> str:
+    lines: list[str] = []
     for m in history:
-        role = "model" if m["role"] == "assistant" else "user"
-        contents.append(types.Content(role=role, parts=[types.Part.from_text(text=m["content"])]))
-    contents.append(types.Content(role="user", parts=[types.Part.from_text(text=last_user_text)]))
-    return contents
-
-
-def _log_usage(response) -> None:
-    usage = getattr(response, "usage_metadata", None)
-    if usage:
-        log.info("Gemini: in=%s out=%s thoughts=%s", usage.prompt_token_count,
-                 usage.candidates_token_count, getattr(usage, "thoughts_token_count", None))
+        role = "АССИСТЕНТ" if m["role"] == "assistant" else "СОНЯ"
+        lines.append(f"{role}: {m['content']}")
+    if lines:
+        lines.append("")
+    lines.append(last_user_text)
+    return "\n".join(lines)
 
 
 async def interpret(user_text: str, context_text: str, history: list[dict]) -> AssistantOutput:
-    client = _client_or_raise()
-    config = types.GenerateContentConfig(
-        system_instruction=SYSTEM_PROMPT,
-        response_mime_type="application/json",
-        response_schema=AssistantOutput,
-        thinking_config=_thinking(settings.gemini_thinking),
-        max_output_tokens=3000,
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
+    prompt = _input_with_history(
+        history,
+        f"КОНТЕКСТ:\n{context_text}\n\nСООБЩЕНИЕ СОНИ:\n{user_text}",
     )
-    contents = _to_contents(history, f"КОНТЕКСТ:\n{context_text}\n\nСООБЩЕНИЕ СОНИ:\n{user_text}")
-    response = await client.aio.models.generate_content(model=settings.gemini_model, contents=contents, config=config)
-    _log_usage(response)
-    text = response.text
-    if not text:
-        raise RuntimeError("Gemini вернул пустой ответ (возможно, сработал фильтр)")
+    text = await _interaction(
+        prompt,
+        system_instruction=SYSTEM_PROMPT,
+        schema=AssistantOutput,
+        max_tokens=1600,
+    )
     return AssistantOutput.model_validate_json(text)
 
 
 async def prose(prompt: str, max_tokens: int = 1200) -> str:
-    client = _client_or_raise()
-    config = types.GenerateContentConfig(
-        thinking_config=_thinking("low"),
-        max_output_tokens=max_tokens,
-        automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-    )
-    response = await client.aio.models.generate_content(model=settings.gemini_model, contents=prompt, config=config)
-    _log_usage(response)
-    return (response.text or "").strip()
+    return (await _interaction(prompt, max_tokens=max_tokens)).strip()
 
 
 def model_name() -> str:
